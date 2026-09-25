@@ -1,84 +1,49 @@
-# orin-agent-web
+# Orin Agent Web
 
-Public website + web application for **Orin Agent** — the autonomous AI
-agent that plans multi-step tasks, uses real tools, pauses for approval,
-and delivers artifacts. Live at `https://agent.orinai.org`.
+Web control plane for the local Orin Agent gateway. It assigns real work, shows the actual event stream, handles approval choices, steers/stops runs, displays final output, and downloads authenticated artifacts.
 
-Part of the [Orin AI ecosystem](https://orinai.org) · MIT licensed.
+## Gateway contract
 
-## What this is
+The browser adapter matches the local Agent API:
 
-Two connected experiences, one codebase and design system:
+- readiness: `GET /health/detailed`
+- runs: `POST /v1/runs`, `GET /v1/runs/:id`
+- events: SSE `GET /v1/runs/:id/events`
+- approvals: `POST /v1/runs/:id/approval`
+- sessions: `/api/sessions` and `/api/sessions/:id/messages` using `data` arrays
+- artifacts: authenticated `GET /v1/artifacts/download/:id`
 
-- **Marketing site** (`#/`): hero, capabilities, execution visibility,
-  trust model. WebGL hero (Three.js, lazy, reduced-motion safe).
-- **Application** (`#/app`): connect to your gateway, assign tasks, watch
-  the execution timeline, resolve approvals, steer/stop runs, open artifacts.
-  Task deep links (`#/tasks/:id`), connection settings (`#/settings`),
-  real documentation (`#/docs`).
+The client normalizes the gateway's `event` field, dotted event names, nested errors, and final `run.output`. Prompt/retrieval data never masquerades as a run result.
 
-The app drives a **real backend** — your Orin Agent gateway over its local
-REST API (`POST /v1/runs`, SSE `/v1/runs/:id/events`, approvals, sessions,
-artifacts). No backend → an honest "not reachable" state, never fake data.
+## Connection security
 
-## Architecture
+- Default URL: `http://127.0.0.1:8642`.
+- Non-loopback endpoints must use HTTPS.
+- URL credentials, query strings, and fragments are rejected.
+- The gateway key and recent run IDs use `sessionStorage`, not persistent `localStorage`.
+- The Vercel deployment sets CSP, frame denial, referrer policy, MIME protection, and permissions policy.
 
-```
-src/
-  api/gateway.ts      typed gateway client (no `any` leaks, GatewayError)
-  state/connection.ts gateway URL/key (localStorage) + status hook
-  hooks/route.ts      hash router (#/, #/app, #/tasks/:id, #/settings, #/docs)
-  components/         Nav, Hero, Products, SelfHost, Footer, Reveal, Cursor, Site
-  pages/              Workspace, RunDetail, Settings, Docs
-  three/nodes.ts      systems-motif WebGL scene (isolated, disposable)
-  App.tsx             route switch
-```
+The backend remains the authorization boundary. The UI only displays approvals and submits the selected choice.
 
-Boundary: frontend consumes stable gateway APIs only. Permissions are
-enforced by the backend runtime — the approval UI only relays decisions.
-
-## Getting Started
+## Development
 
 ```bash
-git clone https://github.com/januththedev/orin-agent-web
-cd orin-agent-web
-npm install
-npm run dev        # http://localhost:5173
+npm ci
+npm test
+npm run build
+npm run dev
 ```
 
-To use the app, run the Orin Agent backend on the same machine (default
-`http://127.0.0.1:8642`, `API_SERVER_PORT` overrides). Set the URL/key in
-Connection settings inside the app.
+Tests use local fakes and never contact a live gateway.
 
-## Environment variables
+## Local Agent
 
-None required at build time. Runtime connection (gateway URL + API key)
-lives in the browser's localStorage, per user.
+Start the signed Orin Agent local runtime with its API server enabled, then open `https://agent.orinai.org/#/settings` and enter the URL/key. A public Vercel page must be explicitly allowed by the local gateway CORS configuration; the browser will not downgrade a remote HTTP connection.
 
 ## Deployment
 
-Static site — any host. Vercel: Add New → Project → import → Deploy, then
-map `agent.orinai.org`. `public/robots.txt` + `public/sitemap.xml` ship SEO.
+Static Vercel deployment. No Vercel server functions or database are required. Task execution remains on the paired machine.
 
-## Testing
+## Privacy
 
-```bash
-npm run build   # tsc --noEmit + vite build (typecheck is the gate)
-```
-
-Behavioral checklist (manual, against a local gateway): connect online →
-create run → events stream → approval pause → allow → completion →
-artifact link; kill backend mid-run → honest error; reload keeps drafts
-via recent-run list. Automated frontend tests are the next milestone
-(tracked, not faked).
-
-## Contributing
-
-Fork → branch → PR against `main`. Match the existing aesthetic
-(monochrome + lime, Space Grotesk + JetBrains Mono). No new dependencies
-without justification. Accessibility: landmarks, focus states, reduced
-motion — all already wired, keep them working.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
+The public site can send task text and gateway credentials to the URL the user explicitly configures. Model, browser, search, and tool providers selected by the local Agent may still receive task data; the web client does not claim that cloud Agent execution is local-only.

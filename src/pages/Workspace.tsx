@@ -6,7 +6,7 @@ const RECENT_KEY = 'orin-agent-web.recent-runs.v1';
 
 function loadRecent(): string[] {
   try {
-    const raw = localStorage.getItem(RECENT_KEY);
+    const raw = sessionStorage.getItem(RECENT_KEY);
     const arr = JSON.parse(raw || '[]') as unknown;
     return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string').slice(0, 20) : [];
   } catch { return []; }
@@ -25,7 +25,7 @@ export function Workspace({ gw, go }: { gw: Gateway; go: (to: string) => void })
     if (gw.status !== 'online' || tab !== 'sessions') return;
     let live = true;
     gw.client.sessions().then(
-      (r) => live && setSessions(Array.isArray(r.sessions) ? r.sessions : []),
+      (r) => live && setSessions(r),
       (e) => live && setSessionsError(e instanceof Error ? e.message : 'Failed to load sessions.'),
     );
     return () => { live = false; };
@@ -41,7 +41,7 @@ export function Workspace({ gw, go }: { gw: Gateway; go: (to: string) => void })
       if (typeof run.run_id !== 'string' || !run.run_id) throw new GatewayError(502, 'Gateway returned a malformed run.');
       const next = [run.run_id, ...recent].slice(0, 20);
       setRecent(next);
-      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* private mode */ }
+      try { sessionStorage.setItem(RECENT_KEY, JSON.stringify(next)); } catch { /* private mode */ }
       setInput('');
       go(`tasks/${encodeURIComponent(run.run_id)}`);
     } catch (e) {
